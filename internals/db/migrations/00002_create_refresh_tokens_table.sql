@@ -1,7 +1,7 @@
 -- +goose Up
 -- +goose StatementBegin
 create table refresh_tokens (
-    token varchar(255),
+    token varchar(50),
     user_id uuid not null,
     created_at timestamptz not null default now(),
     expires_at timestamptz not null,

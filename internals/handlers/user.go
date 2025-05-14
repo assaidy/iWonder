@@ -15,6 +15,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// TODO: might return send user data in response for update request
+
 type UserPayload struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
@@ -110,6 +112,68 @@ func HandleLogin(c *fiber.Ctx) error {
 		},
 		"accessToken":  accessToken,
 		"refreshToken": refreshToken,
+	})
+}
+
+type GetAccessTokenRequest struct {
+	RefreshToken string `json:"refreshToken"`
+}
+
+func HandleGetAccessToken(c *fiber.Ctx) error {
+	var req GetAccessTokenRequest
+	if err := parseAndValidateJsonBody(c, &req); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	}
+
+	repoRefreshToken, err := queries.GetRefreshToken(context.Background(), req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.Status(fiber.StatusNotFound).SendString("refresh token not found")
+		}
+		return fmt.Errorf("error getting refresh token: %v", err)
+	}
+
+	if repoRefreshToken.ExpiresAt.Sub(time.Now()) < 0 {
+		return c.Status(fiber.StatusUnauthorized).SendString("token expired")
+	}
+
+	accessToken, err := utils.GenerateJWTAccessToken(utils.JwtClaims{
+		UserID: repoRefreshToken.UserID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenExpirationMinutes * time.Minute)),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("error creating jwt access token: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"accessToken": accessToken,
+	})
+}
+
+func HandleGetUserByID(c *fiber.Ctx) error {
+	userID, err := uuid.Parse(c.Params("user_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid user id")
+	}
+
+	repoUser, err := queries.GetUserByID(context.Background(), userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.Status(fiber.StatusNotFound).SendString("user not found")
+		}
+		return fmt.Errorf("error getting user: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"user": UserPayload{
+			ID:        repoUser.ID,
+			Name:      repoUser.Name,
+			Bio:       repoUser.Bio.String,
+			Username:  repoUser.Username,
+			CreatedAt: repoUser.CreatedAt,
+		},
 	})
 }
 

@@ -6,11 +6,14 @@ on conflict (username) do nothing;
 -- name: GetUserByUsername :one
 select * from users where username = $1;
 
+-- name: GetUserByID :one
+select * from users where id = $1;
+
 -- name: CheckUserID :one
-select exists(select 1 from users where id = $1 for update);
+select exists (select 1 from users where id = $1 for update);
 
 -- name: CheckUsername :one
-select exists(select 1 from users where username = $1 for update);
+select exists (select 1 from users where username = $1 for update);
 
 -- name: UpdateUserByID :exec
 update users

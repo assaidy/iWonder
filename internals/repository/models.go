@@ -11,6 +11,15 @@ import (
 	"github.com/google/uuid"
 )
 
+type Post struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Title     string
+	Content   string
+	Answered  bool
+	CreatedAt time.Time
+}
+
 type RefreshToken struct {
 	Token     string
 	UserID    uuid.UUID

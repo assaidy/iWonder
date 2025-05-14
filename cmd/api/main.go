@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/assaidy/iWonder/internals/handlers"
+	h "github.com/assaidy/iWonder/internals/handlers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	_ "github.com/joho/godotenv/autoload"
@@ -41,10 +41,22 @@ func main() {
 
 	v1 := app.Group("/v1", logger.New())
 	{
-		v1.Post("/users/register", handlers.HandleRegister)
-		v1.Post("/users/login", handlers.HandleLogin)
-		v1.Put("/users", handlers.HandleUpdateUser, handlers.WithJwt)
-		v1.Delete("/users", handlers.HandleDeleteUser, handlers.WithJwt)
+		v1.Post("/users/register", h.HandleRegister)
+		v1.Post("/users/login", h.HandleLogin)
+		v1.Post("/users/access_token", h.HandleGetAccessToken)
+		v1.Get("/users/:user_id", h.HandleGetUserByID)
+		v1.Put("/users", h.HandleUpdateUser, h.WithJwt)
+		v1.Delete("/users", h.HandleDeleteUser, h.WithJwt)
+
+		v1.Post("/posts", h.HandleCreatePost, h.WithJwt)
+		v1.Get("/posts/:post_id", h.HandleGetPostByID)
+		v1.Put("/posts/:post_id", h.HandleUpdatePostByID, h.WithJwt)
+		v1.Patch("/posts/:post_id/answered", h.HandleTogglePostAnswered, h.WithJwt)
+		v1.Delete("/posts/:post_id", h.HandleDeletePostByID, h.WithJwt)
+		// tags
+		// comments (Upvote/downvote, mark as right answer)
+		// search and filteration
+		// report posts
 	}
 
 	go func() {

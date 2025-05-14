@@ -12,6 +12,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const getRefreshToken = `-- name: GetRefreshToken :one
+select token, user_id, created_at, expires_at from refresh_tokens where token = $1
+`
+
+func (q *Queries) GetRefreshToken(ctx context.Context, token string) (RefreshToken, error) {
+	row := q.db.QueryRowContext(ctx, getRefreshToken, token)
+	var i RefreshToken
+	err := row.Scan(
+		&i.Token,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const insertRefreshToken = `-- name: InsertRefreshToken :exec
 insert into refresh_tokens (token, user_id, expires_at)
 values ($1, $2, $3)

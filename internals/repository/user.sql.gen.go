@@ -13,7 +13,7 @@ import (
 )
 
 const checkUserID = `-- name: CheckUserID :one
-select exists(select 1 from users where id = $1 for update)
+select exists (select 1 from users where id = $1 for update)
 `
 
 func (q *Queries) CheckUserID(ctx context.Context, id uuid.UUID) (bool, error) {
@@ -24,7 +24,7 @@ func (q *Queries) CheckUserID(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 const checkUsername = `-- name: CheckUsername :one
-select exists(select 1 from users where username = $1 for update)
+select exists (select 1 from users where username = $1 for update)
 `
 
 func (q *Queries) CheckUsername(ctx context.Context, username string) (bool, error) {
@@ -41,6 +41,24 @@ delete from users where id = $1
 func (q *Queries) DeleteUserById(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteUserById, id)
 	return err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+select id, name, bio, username, hashed_password, created_at from users where id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Bio,
+		&i.Username,
+		&i.HashedPassword,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
