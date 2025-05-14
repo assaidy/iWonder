@@ -20,11 +20,22 @@ type Post struct {
 	CreatedAt time.Time
 }
 
+type PostTag struct {
+	PostID uuid.UUID
+	TagID  int32
+}
+
 type RefreshToken struct {
 	Token     string
 	UserID    uuid.UUID
 	CreatedAt time.Time
 	ExpiresAt time.Time
+}
+
+type Tag struct {
+	ID        int32
+	Name      string
+	CreatedAt time.Time
 }
 
 type User struct {

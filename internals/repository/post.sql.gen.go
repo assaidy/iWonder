@@ -36,6 +36,21 @@ func (q *Queries) DeletePostByID(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteTagForPost = `-- name: DeleteTagForPost :exec
+delete from post_tags
+where post_id = $1 and tag_id = (select id from tags where name = $2)
+`
+
+type DeleteTagForPostParams struct {
+	PostID uuid.UUID
+	Name   string
+}
+
+func (q *Queries) DeleteTagForPost(ctx context.Context, arg DeleteTagForPostParams) error {
+	_, err := q.db.ExecContext(ctx, deleteTagForPost, arg.PostID, arg.Name)
+	return err
+}
+
 const getPostByID = `-- name: GetPostByID :one
 select id, user_id, title, content, answered, created_at from posts where id = $1
 `
@@ -52,6 +67,36 @@ func (q *Queries) GetPostByID(ctx context.Context, id uuid.UUID) (Post, error) {
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getPostTags = `-- name: GetPostTags :many
+select t.name
+from tags t
+join post_tags pt on pt.tag_id = t.id
+where pt.post_id = $1
+`
+
+func (q *Queries) GetPostTags(ctx context.Context, postID uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getPostTags, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertPost = `-- name: InsertPost :one
@@ -84,6 +129,36 @@ func (q *Queries) InsertPost(ctx context.Context, arg InsertPostParams) (Post, e
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertTag = `-- name: InsertTag :one
+insert into tags (name) 
+values ($1)
+on conflict (name) do update 
+    set name = excluded.name 
+returning id
+`
+
+func (q *Queries) InsertTag(ctx context.Context, name string) (int32, error) {
+	row := q.db.QueryRowContext(ctx, insertTag, name)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertTagForPost = `-- name: InsertTagForPost :exec
+insert into post_tags (post_id, tag_id)
+values ($1, $2)
+`
+
+type InsertTagForPostParams struct {
+	PostID uuid.UUID
+	TagID  int32
+}
+
+func (q *Queries) InsertTagForPost(ctx context.Context, arg InsertTagForPostParams) error {
+	_, err := q.db.ExecContext(ctx, insertTagForPost, arg.PostID, arg.TagID)
+	return err
 }
 
 const togglePostAnswered = `-- name: TogglePostAnswered :one

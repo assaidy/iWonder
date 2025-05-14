@@ -15,7 +15,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// TODO: might return send user data in response for update request
+// TODO: send the entity in the response, across all handlers , only with creational requests
+// TODO: return StatusNoContent for delete requests and remove extra checks
 
 type UserPayload struct {
 	ID        uuid.UUID `json:"id"`

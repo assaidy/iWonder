@@ -53,7 +53,9 @@ func main() {
 		v1.Put("/posts/:post_id", h.HandleUpdatePostByID, h.WithJwt)
 		v1.Patch("/posts/:post_id/answered", h.HandleTogglePostAnswered, h.WithJwt)
 		v1.Delete("/posts/:post_id", h.HandleDeletePostByID, h.WithJwt)
-		// tags
+
+		v1.Post("/posts/:post_id/tags", h.HandleAddPostTags, h.WithJwt)
+		v1.Delete("/posts/:post_id/tags/:tag_name", h.HandleDeletePostTag, h.WithJwt)
 		// comments (Upvote/downvote, mark as right answer)
 		// search and filteration
 		// report posts

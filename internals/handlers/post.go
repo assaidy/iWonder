@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/assaidy/iWonder/internals/db"
@@ -20,6 +21,7 @@ type PostPayload struct {
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"createdAt"`
 	Answered  bool      `json:"answered"`
+	Tags      []string  `json:"tags"`
 }
 
 type CreatePostRequest struct {
@@ -71,6 +73,14 @@ func HandleGetPostByID(c *fiber.Ctx) error {
 		return fmt.Errorf("error getting post: %v", err)
 	}
 
+	tags, err := queries.GetPostTags(context.Background(), postID)
+	if err != nil {
+		return fmt.Errorf("error getting post tags")
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"post": PostPayload{
 			ID:        repoPost.ID,
@@ -79,6 +89,7 @@ func HandleGetPostByID(c *fiber.Ctx) error {
 			Content:   repoPost.Content,
 			CreatedAt: repoPost.CreatedAt,
 			Answered:  repoPost.Answered,
+			Tags:      tags,
 		},
 	})
 }
@@ -205,4 +216,96 @@ func HandleDeletePostByID(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).SendString("post deleted successfully")
+}
+
+type AddPostTagsRequest struct {
+	Tags []string `json:"tags" validate:"required"`
+}
+
+func HandleAddPostTags(c *fiber.Ctx) error {
+	postID, err := uuid.Parse(c.Params("post_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
+	}
+	userID := getAuthedUserID(c)
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return fmt.Errorf("error bigin tx: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := queries.WithTx(tx)
+
+	if ok, err := qtx.CheckPostForUser(context.Background(), repository.CheckPostForUserParams{
+		ID:     postID,
+		UserID: userID,
+	}); err != nil {
+		return fmt.Errorf("error checking post: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("post not found for user")
+	}
+
+	var req AddPostTagsRequest
+	if err := parseAndValidateJsonBody(c, &req); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	}
+
+	for _, tag := range req.Tags {
+		tagID, err := qtx.InsertTag(context.Background(), strings.ToLower(strings.TrimSpace(tag)))
+		if err != nil {
+			return fmt.Errorf("error inserting tag: %v", err)
+		}
+
+		if err := qtx.InsertTagForPost(context.Background(), repository.InsertTagForPostParams{
+			PostID: postID,
+			TagID:  tagID,
+		}); err != nil {
+			return fmt.Errorf("error inserting tag for post: %v", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("err commit tx: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).SendString("tags added successfully")
+}
+
+func HandleDeletePostTag(c *fiber.Ctx) error {
+	postID, err := uuid.Parse(c.Params("post_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
+	}
+	userID := getAuthedUserID(c)
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return fmt.Errorf("error bigin tx: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := queries.WithTx(tx)
+
+	if ok, err := qtx.CheckPostForUser(context.Background(), repository.CheckPostForUserParams{
+		ID:     postID,
+		UserID: userID,
+	}); err != nil {
+		return fmt.Errorf("error checking post: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("post not found for user")
+	}
+
+	tagName := strings.ToLower(c.Params("tag_name"))
+
+	if err := qtx.DeleteTagForPost(context.Background(), repository.DeleteTagForPostParams{
+		PostID: postID,
+		Name:   tagName,
+	}); err != nil {
+		return fmt.Errorf("error deleting post tag: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("err commit tx: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).SendString("tag deleted successfully")
 }
