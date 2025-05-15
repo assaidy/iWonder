@@ -50,14 +50,23 @@ func main() {
 		v1.Delete("/users", h.HandleDeleteUser, h.WithJwt)
 
 		v1.Post("/posts", h.HandleCreatePost, h.WithJwt)
-		v1.Get("/posts/:post_id", h.HandleGetPostByID)
-		v1.Put("/posts/:post_id", h.HandleUpdatePostByID, h.WithJwt)
-		v1.Patch("/posts/:post_id/answered", h.HandleTogglePostAnswered, h.WithJwt)
-		v1.Delete("/posts/:post_id", h.HandleDeletePostByID, h.WithJwt)
+		v1.Get("/posts/:post_id", h.HandleGetPost)
+		v1.Put("/posts/:post_id", h.HandleUpdatePost, h.WithJwt)
+		v1.Delete("/posts/:post_id", h.HandleDeletePost, h.WithJwt)
 
 		v1.Post("/posts/:post_id/tags", h.HandleAddPostTags, h.WithJwt)
 		v1.Delete("/posts/:post_id/tags/:tag_name", h.HandleDeletePostTag, h.WithJwt)
-		// comments (Upvote/downvote, mark as right answer)
+
+		v1.Post("/posts/:post_id/comments", h.HandleCreateComment, h.WithJwt)
+		v1.Put("/posts/comments/:comment_id", h.HandleUpdateComment, h.WithJwt)
+		v1.Delete("/posts/comments/:comment_id", h.HandleDeleteComment, h.WithJwt)
+		v1.Get("/posts/:post_id/comments", h.HandleGetAllPostComments) // paginate with cursor
+
+		v1.Post("/posts/comments/:comment_id/vote", h.HandleVoteComment, h.WithJwt) // ?kind=up ?kind=down
+		v1.Delete("/posts/comments/:comment_id/vote", h.HandleUnvoteComment, h.WithJwt)
+		v1.Post("/posts/:post_id/answer/:comment_id", h.HandleSetPostAnswer, h.WithJwt)
+		v1.Post("/posts/:post_id/unanswer", h.HandleUnsetPostAnswer, h.WithJwt)
+
 		// search and filteration
 		// report posts
 	}

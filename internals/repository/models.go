@@ -11,6 +11,20 @@ import (
 	"github.com/google/uuid"
 )
 
+type Comment struct {
+	ID        uuid.UUID
+	PostID    uuid.UUID
+	UserID    uuid.UUID
+	Content   string
+	CreatedAt time.Time
+}
+
+type CommentVote struct {
+	CommentID uuid.UUID
+	UserID    uuid.UUID
+	Kind      string
+}
+
 type Post struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
@@ -23,6 +37,11 @@ type Post struct {
 type PostTag struct {
 	PostID uuid.UUID
 	TagID  int32
+}
+
+type PostsAnswer struct {
+	PostID    uuid.UUID
+	CommentID uuid.UUID
 }
 
 type RefreshToken struct {

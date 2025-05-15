@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -59,4 +61,34 @@ func WithJwt(c *fiber.Ctx) error {
 
 func getAuthedUserID(c *fiber.Ctx) uuid.UUID {
 	return c.Locals(AuthedUserID).(uuid.UUID)
+}
+
+// marshalJsonAndEncodeBase64 marshals the provided source struct into JSON bytes and then encodes those bytes
+// into a base64-encoded string. Returns the base64-encoded string or an error if the marshaling fails.
+func marshalJsonAndEncodeBase64(src any) (string, error) {
+	jsonBytes, err := json.Marshal(src)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(jsonBytes), nil
+}
+
+// decodeBase64AndUnmarshalJson decodes a base64-encoded string and unmarshals it into the provided output struct.
+// It first checks if the base64String is empty, returning nil if it is. Otherwise, it decodes the base64 string
+// into JSON bytes, unmarshals those bytes into the output struct, and then validates the struct using utils.ValidateStruct.
+// Returns an error if any step in the process fails.
+func decodeBase64AndUnmarshalJson(out any, base64String string) error {
+	if base64String == "" {
+		return nil
+	}
+	jsonBytes, err := base64.StdEncoding.DecodeString(base64String)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(jsonBytes, out)
+	if err != nil {
+		return err
+	}
+	err = utils.ValidateStruct(out)
+	return err
 }

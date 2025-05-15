@@ -7,9 +7,37 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const checkCommentForUser = `-- name: CheckCommentForUser :one
+select exists (select 1 from comments where id = $1 and user_id = $2 for update)
+`
+
+type CheckCommentForUserParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+}
+
+func (q *Queries) CheckCommentForUser(ctx context.Context, arg CheckCommentForUserParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkCommentForUser, arg.ID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkPost = `-- name: CheckPost :one
+select exists (select 1 from posts where id = $1 for update)
+`
+
+func (q *Queries) CheckPost(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkPost, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
 
 const checkPostForUser = `-- name: CheckPostForUser :one
 select exists (select 1 from posts where id = $1 and user_id = $2 for update)
@@ -25,6 +53,15 @@ func (q *Queries) CheckPostForUser(ctx context.Context, arg CheckPostForUserPara
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const deleteComment = `-- name: DeleteComment :exec
+delete from comments where id = $1
+`
+
+func (q *Queries) DeleteComment(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteComment, id)
+	return err
 }
 
 const deletePostByID = `-- name: DeletePostByID :exec
@@ -69,6 +106,53 @@ func (q *Queries) GetPostByID(ctx context.Context, id uuid.UUID) (Post, error) {
 	return i, err
 }
 
+const getPostComments = `-- name: GetPostComments :many
+select id, post_id, user_id, content, created_at from comments
+where 
+    post_id = $1 and
+    created_at <= coalesce(
+        nullif($3::timestamptz, '0001-01-01 00:00:00'::timestamptz),
+        now()::timestamptz
+    )
+order by created_at desc
+limit $2
+`
+
+type GetPostCommentsParams struct {
+	PostID    uuid.UUID
+	Limit     int32
+	CreatedAt time.Time
+}
+
+func (q *Queries) GetPostComments(ctx context.Context, arg GetPostCommentsParams) ([]Comment, error) {
+	rows, err := q.db.QueryContext(ctx, getPostComments, arg.PostID, arg.Limit, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Comment
+	for rows.Next() {
+		var i Comment
+		if err := rows.Scan(
+			&i.ID,
+			&i.PostID,
+			&i.UserID,
+			&i.Content,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPostTags = `-- name: GetPostTags :many
 select t.name
 from tags t
@@ -97,6 +181,28 @@ func (q *Queries) GetPostTags(ctx context.Context, postID uuid.UUID) ([]string, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertComment = `-- name: InsertComment :exec
+insert into comments (id, post_id, user_id, content)
+values ($1, $2, $3, $4)
+`
+
+type InsertCommentParams struct {
+	ID      uuid.UUID
+	PostID  uuid.UUID
+	UserID  uuid.UUID
+	Content string
+}
+
+func (q *Queries) InsertComment(ctx context.Context, arg InsertCommentParams) error {
+	_, err := q.db.ExecContext(ctx, insertComment,
+		arg.ID,
+		arg.PostID,
+		arg.UserID,
+		arg.Content,
+	)
+	return err
 }
 
 const insertPost = `-- name: InsertPost :one
@@ -161,34 +267,28 @@ func (q *Queries) InsertTagForPost(ctx context.Context, arg InsertTagForPostPara
 	return err
 }
 
-const togglePostAnswered = `-- name: TogglePostAnswered :one
-update posts
-set answered = not answered
-where id = $1
-returning id, user_id, title, content, answered, created_at
+const updateComment = `-- name: UpdateComment :exec
+update comments
+set content = $1
+where id = $2
 `
 
-func (q *Queries) TogglePostAnswered(ctx context.Context, id uuid.UUID) (Post, error) {
-	row := q.db.QueryRowContext(ctx, togglePostAnswered, id)
-	var i Post
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Title,
-		&i.Content,
-		&i.Answered,
-		&i.CreatedAt,
-	)
-	return i, err
+type UpdateCommentParams struct {
+	Content string
+	ID      uuid.UUID
 }
 
-const updatePostByID = `-- name: UpdatePostByID :one
+func (q *Queries) UpdateComment(ctx context.Context, arg UpdateCommentParams) error {
+	_, err := q.db.ExecContext(ctx, updateComment, arg.Content, arg.ID)
+	return err
+}
+
+const updatePostByID = `-- name: UpdatePostByID :exec
 update posts
 set
     title = $1,
     content = $2
 where id = $3
-returning id, user_id, title, content, answered, created_at
 `
 
 type UpdatePostByIDParams struct {
@@ -197,16 +297,7 @@ type UpdatePostByIDParams struct {
 	ID      uuid.UUID
 }
 
-func (q *Queries) UpdatePostByID(ctx context.Context, arg UpdatePostByIDParams) (Post, error) {
-	row := q.db.QueryRowContext(ctx, updatePostByID, arg.Title, arg.Content, arg.ID)
-	var i Post
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Title,
-		&i.Content,
-		&i.Answered,
-		&i.CreatedAt,
-	)
-	return i, err
+func (q *Queries) UpdatePostByID(ctx context.Context, arg UpdatePostByIDParams) error {
+	_, err := q.db.ExecContext(ctx, updatePostByID, arg.Title, arg.Content, arg.ID)
+	return err
 }

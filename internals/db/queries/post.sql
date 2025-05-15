@@ -9,19 +9,12 @@ select * from posts where id = $1;
 -- name: CheckPostForUser :one
 select exists (select 1 from posts where id = $1 and user_id = $2 for update);
 
--- name: UpdatePostByID :one
+-- name: UpdatePostByID :exec
 update posts
 set
     title = $1,
     content = $2
-where id = $3
-returning *;
-
--- name: TogglePostAnswered :one
-update posts
-set answered = not answered
-where id = $1
-returning *;
+where id = $3;
 
 -- name: DeletePostByID :exec
 delete from posts where id = $1;
@@ -46,3 +39,32 @@ select t.name
 from tags t
 join post_tags pt on pt.tag_id = t.id
 where pt.post_id = $1;
+
+-- name: CheckPost :one
+select exists (select 1 from posts where id = $1 for update);
+
+-- name: InsertComment :exec
+insert into comments (id, post_id, user_id, content)
+values ($1, $2, $3, $4);
+
+-- name: CheckCommentForUser :one
+select exists (select 1 from comments where id = $1 and user_id = $2 for update);
+
+-- name: UpdateComment :exec
+update comments
+set content = $1
+where id = $2;
+
+-- name: DeleteComment :exec
+delete from comments where id = $1;
+
+-- name: GetPostComments :many
+select * from comments
+where 
+    post_id = $1 and
+    created_at <= coalesce(
+        nullif(sqlc.arg(created_at)::timestamptz, '0001-01-01 00:00:00'::timestamptz),
+        now()::timestamptz
+    )
+order by created_at desc
+limit $2;

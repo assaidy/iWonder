@@ -59,7 +59,7 @@ func HandleCreatePost(c *fiber.Ctx) error {
 	})
 }
 
-func HandleGetPostByID(c *fiber.Ctx) error {
+func HandleGetPost(c *fiber.Ctx) error {
 	postID, err := uuid.Parse(c.Params("post_id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
@@ -99,7 +99,7 @@ type UpdatePostRequest struct {
 	Content string `json:"content" validate:"required,customNoOuterSpaces"`
 }
 
-func HandleUpdatePostByID(c *fiber.Ctx) error {
+func HandleUpdatePost(c *fiber.Ctx) error {
 	var req UpdatePostRequest
 	if err := parseAndValidateJsonBody(c, &req); err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
@@ -127,11 +127,10 @@ func HandleUpdatePostByID(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).SendString("post not found for user")
 	}
 
-	repoPost, err := qtx.UpdatePostByID(context.Background(), repository.UpdatePostByIDParams{
+	if err := qtx.UpdatePostByID(context.Background(), repository.UpdatePostByIDParams{
 		Title:   req.Title,
 		Content: req.Content,
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("error updating post: %v", err)
 	}
 
@@ -139,63 +138,11 @@ func HandleUpdatePostByID(c *fiber.Ctx) error {
 		return fmt.Errorf("error commit tx: %v", err)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"post": PostPayload{
-			ID:        repoPost.ID,
-			UserID:    repoPost.UserID,
-			Title:     repoPost.Title,
-			Content:   repoPost.Content,
-			CreatedAt: repoPost.CreatedAt,
-			Answered:  repoPost.Answered,
-		},
-	})
+	return c.Status(fiber.StatusOK).SendString("post updated successfully")
 }
 
-func HandleTogglePostAnswered(c *fiber.Ctx) error {
-	postID, err := uuid.Parse(c.Params("post_id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
-	}
-	userID := getAuthedUserID(c)
-
-	tx, err := db.Connection.Begin()
-	if err != nil {
-		return fmt.Errorf("error bigin tx: %v", err)
-	}
-	defer tx.Rollback()
-	qtx := queries.WithTx(tx)
-
-	if ok, err := qtx.CheckPostForUser(context.Background(), repository.CheckPostForUserParams{
-		ID:     postID,
-		UserID: userID,
-	}); err != nil {
-		return fmt.Errorf("error checking post: %v", err)
-	} else if !ok {
-		return c.Status(fiber.StatusNotFound).SendString("post not found for user")
-	}
-
-	repoPost, err := qtx.TogglePostAnswered(context.Background(), postID)
-	if err != nil {
-		return fmt.Errorf("error toggle post answered: %v", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("error commit tx: %v", err)
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"post": PostPayload{
-			ID:        repoPost.ID,
-			UserID:    repoPost.UserID,
-			Title:     repoPost.Title,
-			Content:   repoPost.Content,
-			CreatedAt: repoPost.CreatedAt,
-			Answered:  repoPost.Answered,
-		},
-	})
-}
-
-func HandleDeletePostByID(c *fiber.Ctx) error {
+// TODO: might delete the check and edit the where clause in the delete query
+func HandleDeletePost(c *fiber.Ctx) error {
 	postID, err := uuid.Parse(c.Params("post_id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
@@ -215,7 +162,7 @@ func HandleDeletePostByID(c *fiber.Ctx) error {
 		return fmt.Errorf("error deleting post: %v", err)
 	}
 
-	return c.Status(fiber.StatusOK).SendString("post deleted successfully")
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 type AddPostTagsRequest struct {
@@ -271,6 +218,7 @@ func HandleAddPostTags(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).SendString("tags added successfully")
 }
 
+// TODO: might delete the check and edit the where clause in the delete query
 func HandleDeletePostTag(c *fiber.Ctx) error {
 	postID, err := uuid.Parse(c.Params("post_id"))
 	if err != nil {
@@ -307,5 +255,194 @@ func HandleDeletePostTag(c *fiber.Ctx) error {
 		return fmt.Errorf("err commit tx: %v", err)
 	}
 
-	return c.Status(fiber.StatusOK).SendString("tag deleted successfully")
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type CreateCommentRequest struct {
+	Content string `json:"content" validate:"required,customNoOuterSpaces"`
+}
+
+func HandleCreateComment(c *fiber.Ctx) error {
+	postID, err := uuid.Parse(c.Params("post_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
+	}
+	userID := getAuthedUserID(c)
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return fmt.Errorf("error bigin tx: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := queries.WithTx(tx)
+
+	if ok, err := qtx.CheckPost(context.Background(), postID); err != nil {
+		return fmt.Errorf("error checking post: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("post not found")
+	}
+
+	var req CreateCommentRequest
+	if err := parseAndValidateJsonBody(c, &req); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	}
+
+	if err := qtx.InsertComment(context.Background(), repository.InsertCommentParams{
+		ID:      uuid.New(),
+		PostID:  postID,
+		UserID:  userID,
+		Content: req.Content,
+	}); err != nil {
+		return fmt.Errorf("error inserting comment: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error commit tx: %v", err)
+	}
+
+	return c.Status(fiber.StatusCreated).SendString("comment created successfully")
+}
+
+type UpdateCommentRequest struct {
+	Content string `json:"content" validate:"required,customNoOuterSpaces"`
+}
+
+func HandleUpdateComment(c *fiber.Ctx) error {
+	commentID, err := uuid.Parse(c.Params("comment_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid comment id")
+	}
+	userID := getAuthedUserID(c)
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return fmt.Errorf("error bigin tx: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := queries.WithTx(tx)
+
+	if ok, err := qtx.CheckCommentForUser(context.Background(), repository.CheckCommentForUserParams{
+		ID:     commentID,
+		UserID: userID,
+	}); err != nil {
+		return fmt.Errorf("error checking comment for user: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("comment not found for user")
+	}
+
+	var req UpdateCommentRequest
+	if err := parseAndValidateJsonBody(c, &req); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	}
+
+	if err := qtx.UpdateComment(context.Background(), repository.UpdateCommentParams{
+		ID:      commentID,
+		Content: req.Content,
+	}); err != nil {
+		return fmt.Errorf("error udpating comment: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error commit tx: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).SendString("comment updated successfully")
+}
+
+func HandleDeleteComment(c *fiber.Ctx) error {
+	commentID, err := uuid.Parse(c.Params("comment_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid comment id")
+	}
+	userID := getAuthedUserID(c)
+
+	if ok, err := queries.CheckCommentForUser(context.Background(), repository.CheckCommentForUserParams{
+		ID:     commentID,
+		UserID: userID,
+	}); err != nil {
+		return fmt.Errorf("error checking comment for user: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("comment not found for user")
+	}
+
+	if err := queries.DeleteComment(context.Background(), commentID); err != nil {
+		return fmt.Errorf("error deleting comment: %v", err)
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type CommentsCursor struct {
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type CommentPayload struct {
+	ID        uuid.UUID `json:"id"`
+	PostID    uuid.UUID `json:"postID"`
+	UserID    uuid.UUID `json:"userID"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func HandleGetAllPostComments(c *fiber.Ctx) error {
+	postID, err := uuid.Parse(c.Params("post_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
+	}
+
+	if ok, err := queries.CheckPost(context.Background(), postID); err != nil {
+		return fmt.Errorf("error checking post: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("post not found")
+	}
+
+	limit := c.QueryInt("limit")
+	if limit < 10 || limit > 100 {
+		limit = 10
+	}
+
+	var requestCursor CommentsCursor
+	if err := decodeBase64AndUnmarshalJson(&requestCursor, c.Query("cursor")); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid cursor format")
+	}
+
+	repoComments, err := queries.GetPostComments(context.Background(), repository.GetPostCommentsParams{
+		PostID:    postID,
+		CreatedAt: requestCursor.CreatedAt,
+		Limit:     int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("error getting post comments: %v", err)
+	}
+
+	var encodedResponseCursor string
+	hasMore := limit < len(repoComments)
+	if hasMore {
+		responseCursor := CommentsCursor{
+			CreatedAt: repoComments[limit].CreatedAt,
+		}
+		encodedResponseCursor, err = marshalJsonAndEncodeBase64(responseCursor)
+		if err != nil {
+			return fmt.Errorf("error encoding cursor: %v", err)
+		}
+		repoComments = repoComments[:limit]
+	}
+
+	comments := make([]CommentPayload, 0, len(repoComments))
+	for _, repoComment := range repoComments {
+		comments = append(comments, CommentPayload{
+			ID:        repoComment.ID,
+			PostID:    repoComment.PostID,
+			UserID:    repoComment.UserID,
+			Content:   repoComment.Content,
+			CreatedAt: repoComment.CreatedAt,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"comments":   comments,
+		"cursor":     encodedResponseCursor,
+		"hasMore":    hasMore,
+		"totalCount": len(comments),
+	})
 }
