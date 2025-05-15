@@ -45,6 +45,7 @@ func main() {
 		v1.Post("/users/login", h.HandleLogin)
 		v1.Post("/users/access_token", h.HandleGetAccessToken)
 		v1.Get("/users/:user_id", h.HandleGetUserByID)
+		v1.Get("/users/:username", h.HandleGetUserByUsername)
 		v1.Put("/users", h.HandleUpdateUser, h.WithJwt)
 		v1.Delete("/users", h.HandleDeleteUser, h.WithJwt)
 

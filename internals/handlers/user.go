@@ -15,9 +15,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// TODO: send the entity in the response, across all handlers , only with creational requests
-// TODO: return StatusNoContent for delete requests and remove extra checks
-
 type UserPayload struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
@@ -178,6 +175,28 @@ func HandleGetUserByID(c *fiber.Ctx) error {
 	})
 }
 
+func HandleGetUserByUsername(c *fiber.Ctx) error {
+	username := c.Params("user_id")
+
+	repoUser, err := queries.GetUserByUsername(context.Background(), username)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.Status(fiber.StatusNotFound).SendString("user not found")
+		}
+		return fmt.Errorf("error getting user: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"user": UserPayload{
+			ID:        repoUser.ID,
+			Name:      repoUser.Name,
+			Bio:       repoUser.Bio.String,
+			Username:  repoUser.Username,
+			CreatedAt: repoUser.CreatedAt,
+		},
+	})
+}
+
 type UpdateRequest struct {
 	Name     string `json:"name" validate:"required,customNoOuterSpaces,max=100"`
 	Bio      string `json:"bio" validate:"customNoOuterSpaces"`
@@ -234,5 +253,5 @@ func HandleDeleteUser(c *fiber.Ctx) error {
 	if err := queries.DeleteUserById(context.Background(), userID); err != nil {
 		return fmt.Errorf("error deleting user: %v", err)
 	}
-	return c.Status(fiber.StatusOK).SendString("user deleted successfully")
+	return c.SendStatus(fiber.StatusNoContent)
 }
