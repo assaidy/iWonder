@@ -176,7 +176,7 @@ func HandleGetUserByID(c *fiber.Ctx) error {
 }
 
 func HandleGetUserByUsername(c *fiber.Ctx) error {
-	username := c.Params("user_id")
+	username := c.Params("username")
 
 	repoUser, err := queries.GetUserByUsername(context.Background(), username)
 	if err != nil {
