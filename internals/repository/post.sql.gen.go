@@ -12,6 +12,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const checkComment = `-- name: CheckComment :one
+select exists (select 1 from comments where id = $1 for update)
+`
+
+func (q *Queries) CheckComment(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkComment, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const checkCommentForUser = `-- name: CheckCommentForUser :one
 select exists (select 1 from comments where id = $1 and user_id = $2 for update)
 `
@@ -23,6 +34,22 @@ type CheckCommentForUserParams struct {
 
 func (q *Queries) CheckCommentForUser(ctx context.Context, arg CheckCommentForUserParams) (bool, error) {
 	row := q.db.QueryRowContext(ctx, checkCommentForUser, arg.ID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkCommentVoteForUser = `-- name: CheckCommentVoteForUser :one
+select exists (select 1 from comment_votes where comment_id = $1 and user_id = $2 for update)
+`
+
+type CheckCommentVoteForUserParams struct {
+	CommentID uuid.UUID
+	UserID    uuid.UUID
+}
+
+func (q *Queries) CheckCommentVoteForUser(ctx context.Context, arg CheckCommentVoteForUserParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkCommentVoteForUser, arg.CommentID, arg.UserID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -61,6 +88,29 @@ delete from comments where id = $1
 
 func (q *Queries) DeleteComment(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteComment, id)
+	return err
+}
+
+const deleteCommentVote = `-- name: DeleteCommentVote :exec
+delete from comment_votes where comment_id = $1 and user_id = $2
+`
+
+type DeleteCommentVoteParams struct {
+	CommentID uuid.UUID
+	UserID    uuid.UUID
+}
+
+func (q *Queries) DeleteCommentVote(ctx context.Context, arg DeleteCommentVoteParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCommentVote, arg.CommentID, arg.UserID)
+	return err
+}
+
+const deletePostAnswer = `-- name: DeletePostAnswer :exec
+delete from posts_answer where post_id = $1
+`
+
+func (q *Queries) DeletePostAnswer(ctx context.Context, postID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deletePostAnswer, postID)
 	return err
 }
 
@@ -205,6 +255,24 @@ func (q *Queries) InsertComment(ctx context.Context, arg InsertCommentParams) er
 	return err
 }
 
+const insertCommentVote = `-- name: InsertCommentVote :exec
+insert into comment_votes (comment_id, user_id, kind)
+values ($1, $2, $3)
+on conflict (comment_id, user_id) do update
+    set kind = excluded.kind
+`
+
+type InsertCommentVoteParams struct {
+	CommentID uuid.UUID
+	UserID    uuid.UUID
+	Kind      string
+}
+
+func (q *Queries) InsertCommentVote(ctx context.Context, arg InsertCommentVoteParams) error {
+	_, err := q.db.ExecContext(ctx, insertCommentVote, arg.CommentID, arg.UserID, arg.Kind)
+	return err
+}
+
 const insertPost = `-- name: InsertPost :one
 insert into posts (id, user_id, title, content)
 values ($1, $2, $3, $4)
@@ -235,6 +303,23 @@ func (q *Queries) InsertPost(ctx context.Context, arg InsertPostParams) (Post, e
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertPostAnswer = `-- name: InsertPostAnswer :exec
+insert into posts_answer (post_id, comment_id)
+values ($1, $2)
+on conflict (post_id) do update
+    set comment_id = excluded.comment_id
+`
+
+type InsertPostAnswerParams struct {
+	PostID    uuid.UUID
+	CommentID uuid.UUID
+}
+
+func (q *Queries) InsertPostAnswer(ctx context.Context, arg InsertPostAnswerParams) error {
+	_, err := q.db.ExecContext(ctx, insertPostAnswer, arg.PostID, arg.CommentID)
+	return err
 }
 
 const insertTag = `-- name: InsertTag :one

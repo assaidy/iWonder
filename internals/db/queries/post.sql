@@ -68,3 +68,27 @@ where
     )
 order by created_at desc
 limit $2;
+
+-- name: CheckComment :one
+select exists (select 1 from comments where id = $1 for update);
+
+-- name: InsertCommentVote :exec
+insert into comment_votes (comment_id, user_id, kind)
+values ($1, $2, $3)
+on conflict (comment_id, user_id) do update
+    set kind = excluded.kind;
+
+-- name: CheckCommentVoteForUser :one
+select exists (select 1 from comment_votes where comment_id = $1 and user_id = $2 for update);
+
+-- name: DeleteCommentVote :exec
+delete from comment_votes where comment_id = $1 and user_id = $2;
+
+-- name: InsertPostAnswer :exec
+insert into posts_answer (post_id, comment_id)
+values ($1, $2)
+on conflict (post_id) do update
+    set comment_id = excluded.comment_id;
+
+-- name: DeletePostAnswer :exec
+delete from posts_answer where post_id = $1;

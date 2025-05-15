@@ -446,3 +446,142 @@ func HandleGetAllPostComments(c *fiber.Ctx) error {
 		"totalCount": len(comments),
 	})
 }
+
+func HandleVoteComment(c *fiber.Ctx) error {
+	commentID, err := uuid.Parse(c.Params("comment_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid comment id")
+	}
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return fmt.Errorf("error bigin tx: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := queries.WithTx(tx)
+
+	kind := c.Query("kind")
+	if !(kind == "up" || kind == "down") {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid vote kind")
+	}
+
+	if ok, err := qtx.CheckComment(context.Background(), commentID); err != nil {
+		return fmt.Errorf("error checking comment: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("comment not found")
+	}
+
+	userID := getAuthedUserID(c)
+
+	if err := qtx.InsertCommentVote(context.Background(), repository.InsertCommentVoteParams{
+		UserID:    userID,
+		CommentID: commentID,
+		Kind:      kind,
+	}); err != nil {
+		return fmt.Errorf("error inserting comment vote: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error commit tx: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).SendString("vote made successfully")
+}
+
+func HandleUnvoteComment(c *fiber.Ctx) error {
+	commentID, err := uuid.Parse(c.Params("comment_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid comment id")
+	}
+
+	userID := getAuthedUserID(c)
+
+	if ok, err := queries.CheckCommentVoteForUser(context.Background(), repository.CheckCommentVoteForUserParams{
+		CommentID: commentID,
+		UserID:    userID,
+	}); err != nil {
+		return fmt.Errorf("error checking comment vote: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("comment vote not found for user")
+	}
+
+	if err := queries.DeleteCommentVote(context.Background(), repository.DeleteCommentVoteParams{
+		CommentID: commentID,
+		UserID:    userID,
+	}); err != nil {
+		return fmt.Errorf("error deleting comment vote: %v", err)
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func HandleSetPostAnswer(c *fiber.Ctx) error {
+	postID, err := uuid.Parse(c.Params("post_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
+	}
+	userID := getAuthedUserID(c)
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return fmt.Errorf("error bigin tx: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := queries.WithTx(tx)
+
+	if ok, err := qtx.CheckPostForUser(context.Background(), repository.CheckPostForUserParams{
+		ID:     postID,
+		UserID: userID,
+	}); err != nil {
+		return fmt.Errorf("error checking post: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("post not found for user")
+	}
+
+	commentID, err := uuid.Parse(c.Query("comment_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid comment id")
+	}
+
+	if ok, err := qtx.CheckComment(context.Background(), commentID); err != nil {
+		return fmt.Errorf("error checking comment: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("comment not found")
+	}
+
+	if err := qtx.InsertPostAnswer(context.Background(), repository.InsertPostAnswerParams{
+		PostID:    postID,
+		CommentID: commentID,
+	}); err != nil {
+		return fmt.Errorf("error setting post answer: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error commit tx: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).SendString("post answerd successfully")
+}
+
+func HandleUnsetPostAnswer(c *fiber.Ctx) error {
+	postID, err := uuid.Parse(c.Params("post_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
+	}
+	userID := getAuthedUserID(c)
+
+	if ok, err := queries.CheckPostForUser(context.Background(), repository.CheckPostForUserParams{
+		ID:     postID,
+		UserID: userID,
+	}); err != nil {
+		return fmt.Errorf("error checking post: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("post not found for user")
+	}
+
+	if err := queries.DeletePostAnswer(context.Background(), postID); err != nil {
+		return fmt.Errorf("error deleting post answer: %v", err)
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}

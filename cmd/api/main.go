@@ -60,11 +60,11 @@ func main() {
 		v1.Post("/posts/:post_id/comments", h.HandleCreateComment, h.WithJwt)
 		v1.Put("/posts/comments/:comment_id", h.HandleUpdateComment, h.WithJwt)
 		v1.Delete("/posts/comments/:comment_id", h.HandleDeleteComment, h.WithJwt)
-		v1.Get("/posts/:post_id/comments", h.HandleGetAllPostComments) // paginate with cursor
+		v1.Get("/posts/:post_id/comments", h.HandleGetAllPostComments)
 
-		v1.Post("/posts/comments/:comment_id/vote", h.HandleVoteComment, h.WithJwt) // ?kind=up ?kind=down
+		v1.Post("/posts/comments/:comment_id/vote", h.HandleVoteComment, h.WithJwt)
 		v1.Delete("/posts/comments/:comment_id/vote", h.HandleUnvoteComment, h.WithJwt)
-		v1.Post("/posts/:post_id/answer/:comment_id", h.HandleSetPostAnswer, h.WithJwt)
+		v1.Post("/posts/:post_id/answer", h.HandleSetPostAnswer, h.WithJwt)
 		v1.Post("/posts/:post_id/unanswer", h.HandleUnsetPostAnswer, h.WithJwt)
 
 		// search and filteration
