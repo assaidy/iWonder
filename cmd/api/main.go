@@ -58,6 +58,7 @@ func main() {
 
 		v1.Post("/posts/:post_id/tags", h.HandleAddPostTags, h.WithJwt)
 		v1.Delete("/posts/:post_id/tags/:tag_name", h.HandleDeletePostTag, h.WithJwt)
+		// TODO: get post tags
 
 		v1.Post("/posts/:post_id/comments", h.HandleCreateComment, h.WithJwt)
 		v1.Put("/posts/comments/:comment_id", h.HandleUpdateComment, h.WithJwt)
@@ -71,8 +72,8 @@ func main() {
 		v1.Delete("/posts/:post_id/answer", h.HandleUnsetPostAnswer, h.WithJwt)
 		v1.Get("/posts/:post_id/answer", h.HandleGetPostAnswer)
 
-		// v1.Get("users/:user_id/posts", h.HandleGetAllPostsForUser)
-		// v1.Get("/posts", h.HandleGetAllPosts) // query=xyz
+		v1.Get("users/:user_id/posts", h.HandleGetAllPostsForUser)
+		v1.Get("/posts", h.HandleGetAllPosts) // ?query=xyz&tags=x,y,z
 	}
 
 	go func() {

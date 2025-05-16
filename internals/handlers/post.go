@@ -21,7 +21,6 @@ type PostPayload struct {
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"createdAt"`
 	Answered  bool      `json:"answered"`
-	Tags      []string  `json:"tags"`
 }
 
 type CreatePostRequest struct {
@@ -73,14 +72,6 @@ func HandleGetPost(c *fiber.Ctx) error {
 		return fmt.Errorf("error getting post: %v", err)
 	}
 
-	tags, err := queries.GetPostTags(context.Background(), postID)
-	if err != nil {
-		return fmt.Errorf("error getting post tags")
-	}
-	if tags == nil {
-		tags = []string{}
-	}
-
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"post": PostPayload{
 			ID:        repoPost.ID,
@@ -89,7 +80,6 @@ func HandleGetPost(c *fiber.Ctx) error {
 			Content:   repoPost.Content,
 			CreatedAt: repoPost.CreatedAt,
 			Answered:  repoPost.Answered,
-			Tags:      tags,
 		},
 	})
 }
@@ -657,5 +647,130 @@ func HandleGetPostAnswer(c *fiber.Ctx) error {
 			Content:   repoComment.Content,
 			CreatedAt: repoComment.CreatedAt,
 		},
+	})
+}
+
+type PostsCursor struct {
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func HandleGetAllPostsForUser(c *fiber.Ctx) error {
+	userID, err := uuid.Parse(c.Params("user_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid user id")
+	}
+
+	if ok, err := queries.CheckUserID(context.Background(), userID); err != nil {
+		return fmt.Errorf("error checking user id: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("user not found")
+	}
+
+	limit := c.QueryInt("limit")
+	if limit < 10 || limit > 100 {
+		limit = 10
+	}
+
+	var requestCursor PostsCursor
+	if err := decodeBase64AndUnmarshalJson(&requestCursor, c.Query("cursor")); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid cursor format")
+	}
+
+	repoPosts, err := queries.GetUserPosts(context.Background(), repository.GetUserPostsParams{
+		UserID:    userID,
+		CreatedAt: requestCursor.CreatedAt,
+		Limit:     int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("error getting user posts: %v", err)
+	}
+
+	var encodedResponseCursor string
+	hasMore := limit < len(repoPosts)
+	if hasMore {
+		responseCursor := PostsCursor{
+			CreatedAt: repoPosts[limit].CreatedAt,
+		}
+		encodedResponseCursor, err = marshalJsonAndEncodeBase64(responseCursor)
+		if err != nil {
+			return fmt.Errorf("error encoding cursor: %v", err)
+		}
+		repoPosts = repoPosts[:limit]
+	}
+
+	posts := make([]PostPayload, 0, len(repoPosts))
+	for _, repoPost := range repoPosts {
+		posts = append(posts, PostPayload{
+			ID:        repoPost.ID,
+			UserID:    repoPost.UserID,
+			Title:     repoPost.Title,
+			Content:   repoPost.Content,
+			CreatedAt: repoPost.CreatedAt,
+			Answered:  repoPost.Answered,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"posts":      posts,
+		"cursor":     encodedResponseCursor,
+		"hasMore":    hasMore,
+		"totalCount": len(posts),
+	})
+}
+
+func HandleGetAllPosts(c *fiber.Ctx) error {
+	limit := c.QueryInt("limit")
+	if limit < 10 || limit > 100 {
+		limit = 10
+	}
+
+	query := c.Query("query")
+	tags := strings.Split(c.Query("tags"), ",")
+
+	var requestCursor PostsCursor
+	if err := decodeBase64AndUnmarshalJson(&requestCursor, c.Query("cursor")); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid cursor format")
+	}
+
+	repoPosts, err := queries.GetPosts(context.Background(), repository.GetPostsParams{
+		CreatedAt: requestCursor.CreatedAt,
+		Query:     query,
+		Tags:      tags,
+		Limit:     int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("error getting user posts: %v", err)
+	}
+
+	var encodedResponseCursor string
+	hasMore := limit < len(repoPosts)
+	if hasMore {
+		responseCursor := PostsCursor{
+			CreatedAt: repoPosts[limit].CreatedAt,
+		}
+		encodedResponseCursor, err = marshalJsonAndEncodeBase64(responseCursor)
+		if err != nil {
+			return fmt.Errorf("error encoding cursor: %v", err)
+		}
+		repoPosts = repoPosts[:limit]
+	}
+
+	posts := make([]PostPayload, 0, len(repoPosts))
+	for _, repoPost := range repoPosts {
+		posts = append(posts, PostPayload{
+			ID:        repoPost.ID,
+			UserID:    repoPost.UserID,
+			Title:     repoPost.Title,
+			Content:   repoPost.Content,
+			CreatedAt: repoPost.CreatedAt,
+			Answered:  repoPost.Answered,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"posts":      posts,
+		"cursor":     encodedResponseCursor,
+		"hasMore":    hasMore,
+		"totalCount": len(posts),
 	})
 }

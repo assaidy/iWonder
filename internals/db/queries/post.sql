@@ -40,6 +40,33 @@ from tags t
 join post_tags pt on pt.tag_id = t.id
 where pt.post_id = $1;
 
+-- name: GetUserPosts :many
+select *
+from posts
+where
+    user_id = $1 and
+    created_at <= coalesce(
+        nullif(sqlc.arg(created_at)::timestamptz, '0001-01-01 00:00:00'::timestamptz),
+        now()::timestamptz
+    )
+order by created_at desc
+limit $2;
+
+-- name: GetPosts :many
+select p.*
+from posts p
+join post_tags pt on pt.post_id = p.id
+join tags t on t.id = pt.tag_id
+where
+    p.created_at <= coalesce(
+        nullif(sqlc.arg(created_at)::timestamptz, '0001-01-01 00:00:00'::timestamptz),
+        now()::timestamptz
+    ) and
+    coalesce(t.name in (sqlc.slice(tags)), true) and
+    to_tsvector('english', p.title || ' ' || p.content) @@ to_tsquery(sqlc.arg(query))
+order by p.created_at desc
+limit $1;
+
 -- name: CheckPost :one
 select exists (select 1 from posts where id = $1 for update);
 

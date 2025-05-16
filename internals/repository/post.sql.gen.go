@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -263,6 +264,121 @@ func (q *Queries) GetPostTags(ctx context.Context, postID uuid.UUID) ([]string, 
 			return nil, err
 		}
 		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPosts = `-- name: GetPosts :many
+select p.id, p.user_id, p.title, p.content, p.answered, p.created_at
+from posts p
+join post_tags pt on pt.post_id = p.id
+join tags t on t.id = pt.tag_id
+where
+    p.created_at <= coalesce(
+        nullif($2::timestamptz, '0001-01-01 00:00:00'::timestamptz),
+        now()::timestamptz
+    ) and
+    coalesce(t.name in ($3), true) and
+    to_tsvector('english', p.title || ' ' || p.content) @@ to_tsquery($4)
+order by p.created_at desc
+limit $1
+`
+
+type GetPostsParams struct {
+	Limit     int32
+	CreatedAt time.Time
+	Tags      []string
+	Query     string
+}
+
+func (q *Queries) GetPosts(ctx context.Context, arg GetPostsParams) ([]Post, error) {
+	query := getPosts
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.Limit)
+	queryParams = append(queryParams, arg.CreatedAt)
+	if len(arg.Tags) > 0 {
+		for _, v := range arg.Tags {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:tags*/?", strings.Repeat(",?", len(arg.Tags))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:tags*/?", "NULL", 1)
+	}
+	queryParams = append(queryParams, arg.Query)
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Post
+	for rows.Next() {
+		var i Post
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Content,
+			&i.Answered,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserPosts = `-- name: GetUserPosts :many
+select id, user_id, title, content, answered, created_at
+from posts
+where
+    user_id = $1 and
+    created_at <= coalesce(
+        nullif($3::timestamptz, '0001-01-01 00:00:00'::timestamptz),
+        now()::timestamptz
+    )
+order by created_at desc
+limit $2
+`
+
+type GetUserPostsParams struct {
+	UserID    uuid.UUID
+	Limit     int32
+	CreatedAt time.Time
+}
+
+func (q *Queries) GetUserPosts(ctx context.Context, arg GetUserPostsParams) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, getUserPosts, arg.UserID, arg.Limit, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Post
+	for rows.Next() {
+		var i Post
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Content,
+			&i.Answered,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
