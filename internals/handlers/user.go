@@ -113,17 +113,13 @@ func HandleLogin(c *fiber.Ctx) error {
 	})
 }
 
-type GetAccessTokenRequest struct {
-	RefreshToken string `json:"refreshToken"`
-}
-
 func HandleGetAccessToken(c *fiber.Ctx) error {
-	var req GetAccessTokenRequest
-	if err := parseAndValidateJsonBody(c, &req); err != nil {
-		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	refreshToken := c.Query("refreshToken")
+	if refreshToken == "" {
+		return c.Status(fiber.StatusBadRequest).SendString("missing refresh token qeury parameter")
 	}
 
-	repoRefreshToken, err := queries.GetRefreshToken(context.Background(), req.RefreshToken)
+	repoRefreshToken, err := queries.GetRefreshToken(context.Background(), refreshToken)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c.Status(fiber.StatusNotFound).SendString("refresh token not found")

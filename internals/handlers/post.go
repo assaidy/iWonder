@@ -538,7 +538,7 @@ func HandleSetPostAnswer(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).SendString("post not found for user")
 	}
 
-	commentID, err := uuid.Parse(c.Query("comment_id"))
+	commentID, err := uuid.Parse(c.Query("commentID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("invalid comment id")
 	}
