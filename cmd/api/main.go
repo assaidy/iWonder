@@ -15,6 +15,8 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 )
 
+// TODO: use tx in all delete handlers if we check before deleting
+
 func errorHandler(c *fiber.Ctx, err error) error {
 	code := fiber.StatusInternalServerError
 	var fiberErr *fiber.Error
@@ -62,13 +64,15 @@ func main() {
 		v1.Delete("/posts/comments/:comment_id", h.HandleDeleteComment, h.WithJwt)
 		v1.Get("/posts/:post_id/comments", h.HandleGetAllPostComments)
 
-		v1.Post("/posts/comments/:comment_id/vote", h.HandleVoteComment, h.WithJwt)
-		v1.Delete("/posts/comments/:comment_id/vote", h.HandleUnvoteComment, h.WithJwt)
+		v1.Post("/posts/comments/:comment_id/votes", h.HandleVoteComment, h.WithJwt)
+		v1.Delete("/posts/comments/:comment_id/votes", h.HandleUnvoteComment, h.WithJwt)
+		v1.Get("/posts/comments/:comment_id/votes", h.HandleGetCommentVoteCounts)
 		v1.Post("/posts/:post_id/answer", h.HandleSetPostAnswer, h.WithJwt)
 		v1.Delete("/posts/:post_id/answer", h.HandleUnsetPostAnswer, h.WithJwt)
+		v1.Get("/posts/:post_id/answer", h.HandleGetPostAnswer)
 
-		// search and filteration
-		// report posts
+		// v1.Get("users/:user_id/posts", h.HandleGetAllPostsForUser)
+		// v1.Get("/posts", h.HandleGetAllPosts) // query=xyz
 	}
 
 	go func() {

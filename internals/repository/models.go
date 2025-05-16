@@ -34,14 +34,14 @@ type Post struct {
 	CreatedAt time.Time
 }
 
+type PostAnswer struct {
+	PostID    uuid.UUID
+	CommentID uuid.UUID
+}
+
 type PostTag struct {
 	PostID uuid.UUID
 	TagID  int32
-}
-
-type PostsAnswer struct {
-	PostID    uuid.UUID
-	CommentID uuid.UUID
 }
 
 type RefreshToken struct {

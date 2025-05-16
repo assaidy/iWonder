@@ -106,7 +106,7 @@ func (q *Queries) DeleteCommentVote(ctx context.Context, arg DeleteCommentVotePa
 }
 
 const deletePostAnswer = `-- name: DeletePostAnswer :exec
-delete from posts_answer where post_id = $1
+delete from post_answers where post_id = $1
 `
 
 func (q *Queries) DeletePostAnswer(ctx context.Context, postID uuid.UUID) error {
@@ -136,6 +136,46 @@ type DeleteTagForPostParams struct {
 func (q *Queries) DeleteTagForPost(ctx context.Context, arg DeleteTagForPostParams) error {
 	_, err := q.db.ExecContext(ctx, deleteTagForPost, arg.PostID, arg.Name)
 	return err
+}
+
+const getCommentVoteCounts = `-- name: GetCommentVoteCounts :one
+select 
+    sum(case when kind = 'up' then 1 else 0 end) over () as up_count,
+    sum(case when kind = 'down' then 1 else 0 end) over () as down_count
+from comment_votes
+where comment_id = $1
+`
+
+type GetCommentVoteCountsRow struct {
+	UpCount   int64
+	DownCount int64
+}
+
+func (q *Queries) GetCommentVoteCounts(ctx context.Context, commentID uuid.UUID) (GetCommentVoteCountsRow, error) {
+	row := q.db.QueryRowContext(ctx, getCommentVoteCounts, commentID)
+	var i GetCommentVoteCountsRow
+	err := row.Scan(&i.UpCount, &i.DownCount)
+	return i, err
+}
+
+const getPostAnswer = `-- name: GetPostAnswer :one
+select c.id, c.post_id, c.user_id, c.content, c.created_at
+from post_answers pa
+join comments c on c.id = pa.comment_id
+where pa.post_id = $1
+`
+
+func (q *Queries) GetPostAnswer(ctx context.Context, postID uuid.UUID) (Comment, error) {
+	row := q.db.QueryRowContext(ctx, getPostAnswer, postID)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.UserID,
+		&i.Content,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getPostByID = `-- name: GetPostByID :one
@@ -306,7 +346,7 @@ func (q *Queries) InsertPost(ctx context.Context, arg InsertPostParams) (Post, e
 }
 
 const insertPostAnswer = `-- name: InsertPostAnswer :exec
-insert into posts_answer (post_id, comment_id)
+insert into post_answers (post_id, comment_id)
 values ($1, $2)
 on conflict (post_id) do update
     set comment_id = excluded.comment_id

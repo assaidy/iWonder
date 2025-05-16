@@ -141,7 +141,6 @@ func HandleUpdatePost(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).SendString("post updated successfully")
 }
 
-// TODO: might delete the check and edit the where clause in the delete query
 func HandleDeletePost(c *fiber.Ctx) error {
 	postID, err := uuid.Parse(c.Params("post_id"))
 	if err != nil {
@@ -218,7 +217,6 @@ func HandleAddPostTags(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).SendString("tags added successfully")
 }
 
-// TODO: might delete the check and edit the where clause in the delete query
 func HandleDeletePostTag(c *fiber.Ctx) error {
 	postID, err := uuid.Parse(c.Params("post_id"))
 	if err != nil {
@@ -515,6 +513,40 @@ func HandleUnvoteComment(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+func HandleGetCommentVoteCounts(c *fiber.Ctx) error {
+	commentID, err := uuid.Parse(c.Params("comment_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid comment id")
+	}
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return fmt.Errorf("error bigin tx: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := queries.WithTx(tx)
+
+	if ok, err := qtx.CheckComment(context.Background(), commentID); err != nil {
+		return fmt.Errorf("error checking comment: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("comment not found")
+	}
+
+	voteCounts, err := qtx.GetCommentVoteCounts(context.Background(), commentID)
+	if err != nil {
+		return fmt.Errorf("error getting comment vote counts: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error commit tx: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"upCount":   voteCounts.UpCount,
+		"downCount": voteCounts.DownCount,
+	})
+}
+
 func HandleSetPostAnswer(c *fiber.Ctx) error {
 	postID, err := uuid.Parse(c.Params("post_id"))
 	if err != nil {
@@ -584,4 +616,46 @@ func HandleUnsetPostAnswer(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func HandleGetPostAnswer(c *fiber.Ctx) error {
+	postID, err := uuid.Parse(c.Params("post_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
+	}
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return fmt.Errorf("error bigin tx: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := queries.WithTx(tx)
+
+	if ok, err := qtx.CheckPost(context.Background(), postID); err != nil {
+		return fmt.Errorf("error checking post: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("post not found")
+	}
+
+	repoComment, err := qtx.GetPostAnswer(context.Background(), postID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.Status(fiber.StatusNoContent).SendString("no answer for this post")
+		}
+		return fmt.Errorf("error getting post answer: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error commit tx: %v", err)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"comment": CommentPayload{
+			ID:        repoComment.ID,
+			PostID:    repoComment.PostID,
+			UserID:    repoComment.UserID,
+			Content:   repoComment.Content,
+			CreatedAt: repoComment.CreatedAt,
+		},
+	})
 }

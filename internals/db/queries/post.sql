@@ -84,11 +84,24 @@ select exists (select 1 from comment_votes where comment_id = $1 and user_id = $
 -- name: DeleteCommentVote :exec
 delete from comment_votes where comment_id = $1 and user_id = $2;
 
+-- name: GetCommentVoteCounts :one
+select 
+    sum(case when kind = 'up' then 1 else 0 end) over () as up_count,
+    sum(case when kind = 'down' then 1 else 0 end) over () as down_count
+from comment_votes
+where comment_id = $1;
+
 -- name: InsertPostAnswer :exec
-insert into posts_answer (post_id, comment_id)
+insert into post_answers (post_id, comment_id)
 values ($1, $2)
 on conflict (post_id) do update
     set comment_id = excluded.comment_id;
 
 -- name: DeletePostAnswer :exec
-delete from posts_answer where post_id = $1;
+delete from post_answers where post_id = $1;
+
+-- name: GetPostAnswer :one
+select c.*
+from post_answers pa
+join comments c on c.id = pa.comment_id
+where pa.post_id = $1;
