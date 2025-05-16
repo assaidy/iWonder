@@ -57,8 +57,8 @@ func main() {
 		v1.Delete("/posts/:post_id", h.HandleDeletePost, h.WithJwt)
 
 		v1.Post("/posts/:post_id/tags", h.HandleAddPostTags, h.WithJwt)
+		v1.Get("/posts/:post_id/tags", h.HandleGetPostTags)
 		v1.Delete("/posts/:post_id/tags/:tag_name", h.HandleDeletePostTag, h.WithJwt)
-		// TODO: get post tags
 
 		v1.Post("/posts/:post_id/comments", h.HandleCreateComment, h.WithJwt)
 		v1.Put("/posts/comments/:comment_id", h.HandleUpdateComment, h.WithJwt)

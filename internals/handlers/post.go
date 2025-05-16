@@ -207,6 +207,31 @@ func HandleAddPostTags(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).SendString("tags added successfully")
 }
 
+func HandleGetPostTags(c *fiber.Ctx) error {
+	postID, err := uuid.Parse(c.Params("post_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid post id")
+	}
+
+	if ok, err := queries.CheckPost(context.Background(), postID); err != nil {
+		return fmt.Errorf("error checking post: %v", err)
+	} else if !ok {
+		return c.Status(fiber.StatusNotFound).SendString("post not found")
+	}
+
+	tags, err := queries.GetPostTags(context.Background(), postID)
+	if err != nil {
+		return fmt.Errorf("error getting post tags: %v", err)
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"tags": tags,
+	})
+}
+
 func HandleDeletePostTag(c *fiber.Ctx) error {
 	postID, err := uuid.Parse(c.Params("post_id"))
 	if err != nil {
