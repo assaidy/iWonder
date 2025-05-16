@@ -65,7 +65,7 @@ func main() {
 		v1.Post("/posts/comments/:comment_id/vote", h.HandleVoteComment, h.WithJwt)
 		v1.Delete("/posts/comments/:comment_id/vote", h.HandleUnvoteComment, h.WithJwt)
 		v1.Post("/posts/:post_id/answer", h.HandleSetPostAnswer, h.WithJwt)
-		v1.Post("/posts/:post_id/unanswer", h.HandleUnsetPostAnswer, h.WithJwt)
+		v1.Delete("/posts/:post_id/answer", h.HandleUnsetPostAnswer, h.WithJwt)
 
 		// search and filteration
 		// report posts
