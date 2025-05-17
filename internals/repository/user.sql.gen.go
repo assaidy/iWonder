@@ -34,6 +34,22 @@ func (q *Queries) CheckUsername(ctx context.Context, username string) (bool, err
 	return exists, err
 }
 
+const checkUsernameExceptUserID = `-- name: CheckUsernameExceptUserID :one
+select exists (select 1 from users where username = $1 and id != $2 for update)
+`
+
+type CheckUsernameExceptUserIDParams struct {
+	Username string
+	ID       uuid.UUID
+}
+
+func (q *Queries) CheckUsernameExceptUserID(ctx context.Context, arg CheckUsernameExceptUserIDParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkUsernameExceptUserID, arg.Username, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const deleteUserById = `-- name: DeleteUserById :exec
 delete from users where id = $1
 `

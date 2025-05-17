@@ -15,6 +15,9 @@ select exists (select 1 from users where id = $1 for update);
 -- name: CheckUsername :one
 select exists (select 1 from users where username = $1 for update);
 
+-- name: CheckUsernameExceptUserID :one
+select exists (select 1 from users where username = $1 and id != $2 for update);
+
 -- name: UpdateUserByID :exec
 update users
 set

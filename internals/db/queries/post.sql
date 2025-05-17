@@ -20,15 +20,20 @@ where id = $3;
 delete from posts where id = $1;
 
 -- name: InsertTag :one
-insert into tags (name) 
-values ($1)
-on conflict (name) do update 
-    set name = excluded.name 
-returning id;
+with new_tag as (
+    insert into tags (name) 
+    values ($1)
+    on conflict (name) do nothing
+    returning id
+)
+select id from new_tag
+union
+select id from tags where name = $1;
 
 -- name: InsertTagForPost :exec
 insert into post_tags (post_id, tag_id)
-values ($1, $2);
+values ($1, $2)
+on conflict (post_id, tag_id) do nothing;
 
 -- name: DeleteTagForPost :exec
 delete from post_tags

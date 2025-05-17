@@ -118,6 +118,7 @@ func HandleUpdatePost(c *fiber.Ctx) error {
 	}
 
 	if err := qtx.UpdatePostByID(context.Background(), repository.UpdatePostByIDParams{
+		ID:      postID,
 		Title:   req.Title,
 		Content: req.Content,
 	}); err != nil {

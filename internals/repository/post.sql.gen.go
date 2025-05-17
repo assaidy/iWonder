@@ -479,11 +479,15 @@ func (q *Queries) InsertPostAnswer(ctx context.Context, arg InsertPostAnswerPara
 }
 
 const insertTag = `-- name: InsertTag :one
-insert into tags (name) 
-values ($1)
-on conflict (name) do update 
-    set name = excluded.name 
-returning id
+with new_tag as (
+    insert into tags (name) 
+    values ($1)
+    on conflict (name) do nothing
+    returning id
+)
+select id from new_tag
+union
+select id from tags where name = $1
 `
 
 func (q *Queries) InsertTag(ctx context.Context, name string) (int32, error) {
@@ -496,6 +500,7 @@ func (q *Queries) InsertTag(ctx context.Context, name string) (int32, error) {
 const insertTagForPost = `-- name: InsertTagForPost :exec
 insert into post_tags (post_id, tag_id)
 values ($1, $2)
+on conflict (post_id, tag_id) do nothing
 `
 
 type InsertTagForPostParams struct {

@@ -36,24 +36,24 @@ func parseAndValidateJsonBody(c *fiber.Ctx, out any) error {
 }
 
 func WithJwt(c *fiber.Ctx) error {
-	tokenString := strings.TrimPrefix(c.Get(fiber.HeaderAuthorization), "Bearer ")
+	tokenString := strings.TrimSpace(strings.TrimPrefix(c.Get(fiber.HeaderAuthorization), "Bearer"))
 	if tokenString == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "missing or malformed Authorization header")
+		return c.Status(fiber.StatusBadRequest).SendString("missing or malformed Authorization header")
 	}
 	claims, err := utils.ParseJWTTokenString(tokenString)
 	if err != nil {
-		return fiber.ErrUnauthorized
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 	if claims.ExpiresAt.Sub(time.Now()) < 0 {
-		return fiber.ErrUnauthorized
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 	// NOTE: if the users deleted his account, but his access token hasn't expired yet,
 	// and we got a request that uses mwAuth(get's userid from context),
 	// we need to ensure that user exists.
 	if exists, err := queries.CheckUserID(context.Background(), claims.UserID); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, fmt.Sprintf("error checking user ID: %+v", err))
+		return fmt.Errorf("error checking user ID: %+v", err)
 	} else if !exists {
-		return fiber.ErrUnauthorized
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 	c.Locals(AuthedUserID, claims.UserID)
 	return c.Next()

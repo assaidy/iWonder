@@ -27,7 +27,7 @@ type RegisterRequest struct {
 	Name     string `json:"name" validate:"required,customNoOuterSpaces,max=100"`
 	Bio      string `json:"bio" validate:"customNoOuterSpaces"`
 	Username string `json:"username" validate:"required,customUsername,max=50"`
-	Password string `json:"password" validate:"required,customNoOuterSpaces,max=50"`
+	Password string `json:"password" validate:"required,customNoOuterSpaces,min=8,max=50"`
 }
 
 func HandleRegister(c *fiber.Ctx) error {
@@ -60,7 +60,7 @@ func HandleRegister(c *fiber.Ctx) error {
 
 type LoginRequest struct {
 	Username string `json:"username" validate:"required,customUsername,max=50"`
-	Password string `json:"password" validate:"required,customNoOuterSpaces,max=50"`
+	Password string `json:"password" validate:"required,customNoOuterSpaces,min=8,max=50"`
 }
 
 func HandleLogin(c *fiber.Ctx) error {
@@ -193,15 +193,15 @@ func HandleGetUserByUsername(c *fiber.Ctx) error {
 	})
 }
 
-type UpdateRequest struct {
+type UpdateUserRequest struct {
 	Name     string `json:"name" validate:"required,customNoOuterSpaces,max=100"`
 	Bio      string `json:"bio" validate:"customNoOuterSpaces"`
 	Username string `json:"username" validate:"required,customUsername,max=50"`
-	Password string `json:"password" validate:"required,customNoOuterSpaces,max=50"`
+	Password string `json:"password" validate:"required,customNoOuterSpaces,min=8,max=50"`
 }
 
 func HandleUpdateUser(c *fiber.Ctx) error {
-	var req RegisterRequest
+	var req UpdateUserRequest
 	if err := parseAndValidateJsonBody(c, &req); err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
 	}
@@ -215,7 +215,10 @@ func HandleUpdateUser(c *fiber.Ctx) error {
 	defer tx.Rollback()
 	qtx := queries.WithTx(tx)
 
-	if ok, err := qtx.CheckUsername(context.Background(), req.Username); err != nil {
+	if ok, err := qtx.CheckUsernameExceptUserID(context.Background(), repository.CheckUsernameExceptUserIDParams{
+		Username: req.Username,
+		ID:       userID,
+	}); err != nil {
 		return fmt.Errorf("error checking username: %v", err)
 	} else if ok {
 		return c.Status(fiber.StatusConflict).SendString("username already exists")
