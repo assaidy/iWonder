@@ -2,9 +2,9 @@
 -- +goose StatementBegin
 create table post_answers (
     post_id uuid,
-    comment_id uuid,
+    comment_id uuid not null,
 
-    primary key (post_id, comment_id),
+    primary key (post_id),
     foreign key (post_id) references posts (id),
     foreign key (comment_id) references comments (id)
 );

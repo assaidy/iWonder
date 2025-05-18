@@ -7,10 +7,10 @@ package repository
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const checkComment = `-- name: CheckComment :one
@@ -284,8 +284,15 @@ where
         nullif($2::timestamptz, '0001-01-01 00:00:00'::timestamptz),
         now()::timestamptz
     ) and
-    coalesce(t.name in ($3), true) and
-    to_tsvector('english', p.title || ' ' || p.content) @@ to_tsquery($4)
+    (
+        array_length($3::varchar[], 1) IS NULL or
+        array_length($3::varchar[], 1) = 0 or
+        t.name in (select unnest($3::varchar[]))
+    ) and
+    (
+        $4::varchar = '' or
+        to_tsvector('english', p.title || ' ' || p.content) @@ to_tsquery($4::varchar)
+    )
 order by p.created_at desc
 limit $1
 `
@@ -298,20 +305,12 @@ type GetPostsParams struct {
 }
 
 func (q *Queries) GetPosts(ctx context.Context, arg GetPostsParams) ([]Post, error) {
-	query := getPosts
-	var queryParams []interface{}
-	queryParams = append(queryParams, arg.Limit)
-	queryParams = append(queryParams, arg.CreatedAt)
-	if len(arg.Tags) > 0 {
-		for _, v := range arg.Tags {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:tags*/?", strings.Repeat(",?", len(arg.Tags))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:tags*/?", "NULL", 1)
-	}
-	queryParams = append(queryParams, arg.Query)
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, getPosts,
+		arg.Limit,
+		arg.CreatedAt,
+		pq.Array(arg.Tags),
+		arg.Query,
+	)
 	if err != nil {
 		return nil, err
 	}

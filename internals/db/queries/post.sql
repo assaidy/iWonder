@@ -67,8 +67,15 @@ where
         nullif(sqlc.arg(created_at)::timestamptz, '0001-01-01 00:00:00'::timestamptz),
         now()::timestamptz
     ) and
-    coalesce(t.name in (sqlc.slice(tags)), true) and
-    to_tsvector('english', p.title || ' ' || p.content) @@ to_tsquery(sqlc.arg(query))
+    (
+        array_length(sqlc.arg(tags)::varchar[], 1) IS NULL or
+        array_length(sqlc.arg(tags)::varchar[], 1) = 0 or
+        t.name in (select unnest(sqlc.arg(tags)::varchar[]))
+    ) and
+    (
+        sqlc.arg(query)::varchar = '' or
+        to_tsvector('english', p.title || ' ' || p.content) @@ to_tsquery(sqlc.arg(query)::varchar)
+    )
 order by p.created_at desc
 limit $1;
 

@@ -550,7 +550,9 @@ func HandleGetCommentVoteCounts(c *fiber.Ctx) error {
 
 	voteCounts, err := qtx.GetCommentVoteCounts(context.Background(), commentID)
 	if err != nil {
-		return fmt.Errorf("error getting comment vote counts: %v", err)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("error getting comment vote counts: %v", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -751,7 +753,10 @@ func HandleGetAllPosts(c *fiber.Ctx) error {
 	}
 
 	query := c.Query("query")
-	tags := strings.Split(c.Query("tags"), ",")
+	var tags []string
+	if queryTags := c.Query("tags"); queryTags != "" {
+		tags = strings.Split(queryTags, ",")
+	}
 
 	var requestCursor PostsCursor
 	if err := decodeBase64AndUnmarshalJson(&requestCursor, c.Query("cursor")); err != nil {

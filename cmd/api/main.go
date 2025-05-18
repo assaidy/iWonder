@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"log/slog"
 	"os"
@@ -15,23 +16,22 @@ import (
 )
 
 // TODO: use tx in all delete handlers if we check before deleting
+// TODO: rename 'post' to 'question' 'answer' to 'solution'
 
 func errorHandler(c *fiber.Ctx, err error) error {
-	// code := fiber.StatusInternalServerError
-	// var fiberErr *fiber.Error
-	// if errors.As(err, &fiberErr) {
-	// 	code = fiberErr.Code
-	// }
-	// c.Set(fiber.HeaderContentType, fiber.MIMETextPlainCharsetUTF8)
+	code := fiber.StatusInternalServerError
+	var fiberErr *fiber.Error
+	if errors.As(err, &fiberErr) {
+		code = fiberErr.Code
+	}
+	c.Set(fiber.HeaderContentType, fiber.MIMETextPlainCharsetUTF8)
 	// NOTE: Logging occurs before this error handler is executed, so the internal error
 	// has already been logged. We avoid exposing internal error details to the client
 	// by returning a generic error message.
-	// if code == fiber.StatusInternalServerError {
-	// 	return c.SendStatus(code)
-	// }
-	// return c.Status(code).SendString(err.Error())
-
-	return c.SendStatus(fiber.StatusInternalServerError)
+	if code == fiber.StatusInternalServerError {
+		return c.SendStatus(code)
+	}
+	return c.Status(code).SendString(err.Error())
 }
 
 func main() {
@@ -59,7 +59,6 @@ func main() {
 		v1.Put("/posts/:post_id", h.WithJwt, h.HandleUpdatePost)
 		v1.Delete("/posts/:post_id", h.WithJwt, h.HandleDeletePost)
 
-		// TEST:
 		v1.Post("/posts/:post_id/tags", h.WithJwt, h.HandleAddPostTags)
 		v1.Get("/posts/:post_id/tags", h.HandleGetPostTags)
 		v1.Delete("/posts/:post_id/tags/:tag_name", h.WithJwt, h.HandleDeletePostTag)
@@ -72,6 +71,7 @@ func main() {
 		v1.Post("/posts/comments/:comment_id/votes", h.WithJwt, h.HandleVoteComment)
 		v1.Delete("/posts/comments/:comment_id/votes", h.WithJwt, h.HandleUnvoteComment)
 		v1.Get("/posts/comments/:comment_id/votes", h.HandleGetCommentVoteCounts)
+
 		v1.Post("/posts/:post_id/answer", h.WithJwt, h.HandleSetPostAnswer)
 		v1.Delete("/posts/:post_id/answer", h.WithJwt, h.HandleUnsetPostAnswer)
 		v1.Get("/posts/:post_id/answer", h.HandleGetPostAnswer)
